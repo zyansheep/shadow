@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::ffi::{CStr, CString, OsStr, OsString};
 use std::os::unix::ffi::OsStrExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::time::Duration;
@@ -732,7 +732,7 @@ impl<'a> Manager<'a> {
 
             // both ':' and ' ' are valid LD_PRELOAD separators
             for path in value.split(&[':', ' '][..]) {
-                let path = utility::tilde_expansion(path);
+                let path = utility::resolve_path(Path::new(path)).unwrap();
 
                 // user-provided paths are added to the list after shadow's paths
                 preload.push(path.into());

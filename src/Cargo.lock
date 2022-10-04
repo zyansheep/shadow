@@ -1025,6 +1025,7 @@ dependencies = [
  "system-deps",
  "tempfile",
  "vsprintf",
+ "which",
 ]
 
 [[package]]

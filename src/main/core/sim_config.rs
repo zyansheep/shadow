@@ -16,7 +16,7 @@ use crate::core::support::configuration::{
 };
 use crate::core::support::units::{self, Unit};
 use crate::network::network_graph::{load_network_graph, IpAssignment, NetworkGraph, RoutingInfo};
-use crate::utility::tilde_expansion;
+use crate::utility::resolve_path;
 use shadow_shim_helper_rs::simulation_time::SimulationTime;
 
 /// The simulation configuration after processing the configuration options and network graph.
@@ -267,7 +267,8 @@ fn build_host(
                 .options
                 .pcap_directory
                 .flatten_ref()
-                .map(|x| tilde_expansion(x)),
+                .map(|x| resolve_path(std::path::Path::new(x)).ok())
+                .flatten(),
             pcap_capture_size: host
                 .options
                 .pcap_capture_size
@@ -342,8 +343,9 @@ fn build_process(proc: &ProcessOptions) -> anyhow::Result<Vec<ProcessInfo>> {
             .with_context(|| format!("Failed to parse arguments: {x}"))?,
     };
 
-    // perform shell expansion
-    let plugin = tilde_expansion(proc.path.to_str().unwrap());
+    // resolve path
+    let plugin = resolve_path(&proc.path)
+        .with_context(|| format!("Failed to resolve plugin path \"{:?}\"", proc.path))?;
 
     // set argv[0] as the user-provided expanded string, not the canonicalized version
     args.insert(0, plugin.clone().into());

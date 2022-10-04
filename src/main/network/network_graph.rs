@@ -2,13 +2,14 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::error::Error;
 use std::hash::Hash;
+use std::path::Path;
 
 use crate::core::support::configuration::{
     self, Compression, FileSource, GraphOptions, GraphSource,
 };
 use crate::core::support::{units, units::Unit};
 use crate::network::petgraph_wrapper::GraphWrapper;
-use crate::utility::tilde_expansion;
+use crate::utility::resolve_path;
 
 use anyhow::Context;
 use log::*;
@@ -491,12 +492,12 @@ pub fn load_network_graph(graph_options: &GraphOptions) -> Result<String, NetGra
         GraphOptions::Gml(GraphSource::File(FileSource {
             compression: None,
             path: f,
-        })) => std::fs::read_to_string(tilde_expansion(f))
+        })) => std::fs::read_to_string(resolve_path(Path::new(f))?)
             .with_context(|| format!("Failed to read file: {f}"))?,
         GraphOptions::Gml(GraphSource::File(FileSource {
             compression: Some(Compression::Xz),
             path: f,
-        })) => read_xz(tilde_expansion(f))?,
+        })) => read_xz(resolve_path(Path::new(f))?)?,
         GraphOptions::Gml(GraphSource::Inline(s)) => s.clone(),
         GraphOptions::OneGbitSwitch => configuration::ONE_GBIT_SWITCH_GRAPH.to_string(),
     })

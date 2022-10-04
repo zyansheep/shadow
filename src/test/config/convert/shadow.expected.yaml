@@ -29,7 +29,7 @@ hosts:
     processes:
     - start_time: 1
       args: client 5678
-      path: test-config-convert
+      path: ./test-config-convert
       environment: HELLO=WORLD;LD_PRELOAD=/tor/shim/path.so
   testserver:
     network_node_id: <REQUIRES MANUAL ENTRY>
@@ -37,5 +37,5 @@ hosts:
     processes:
     - start_time: 1
       args: server 5678
-      path: test-config-convert
+      path: ./test-config-convert
       environment: HELLO=WORLD

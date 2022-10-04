@@ -27,6 +27,8 @@ use std::marker::PhantomData;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};
 use std::path::{Path, PathBuf};
 
+use anyhow::Context;
+
 use crate::{core::worker::Worker, host::host::HostId};
 
 /// A type that allows us to make a pointer Send + Sync since there is no way
@@ -189,27 +191,34 @@ impl Clone for ObjectCounter {
     }
 }
 
-pub fn tilde_expansion(path: &str) -> std::path::PathBuf {
+/// Resolves the path (but doesn't canonicalize)
+/// "/path/to/test" -> "/path/to/test"
+/// "~/test" -> "/home/user/test"
+/// "../test" -> "../test"
+/// "./test" -> "./test"
+/// "test" -> absolute path of test in $PATH
+pub fn resolve_path(path: &Path) -> anyhow::Result<PathBuf> {
     // if the path begins with a "~"
-    if let Some(x) = path.strip_prefix('~') {
-        // get the tilde-prefix (everything before the first separator)
-        let (tilde_prefix, remainder) = x.split_once('/').unwrap_or((x, ""));
-
-        if tilde_prefix.is_empty() {
-            if let Ok(ref home) = std::env::var("HOME") {
-                return [home, remainder].iter().collect::<std::path::PathBuf>();
-            }
-        } else if ['+', '-'].contains(&tilde_prefix.chars().next().unwrap()) {
-            // not supported
+    if let Ok(remainder) = path.strip_prefix("~") {
+        if let Ok(ref home) = std::env::var("HOME") {
+            let mut path = PathBuf::with_capacity(home.len() + remainder.as_os_str().len());
+            path.push(home);
+            path.push(remainder);
+            Ok(path)
         } else {
-            return ["/home", tilde_prefix, remainder]
-                .iter()
-                .collect::<std::path::PathBuf>();
+            anyhow::bail!("Couldn't find $HOME in env")
+        }
+    } else {
+        // Source exec path from $PATH if path is not a path
+        let path_str = path.to_str().ok_or(anyhow::anyhow!("invalid unicode"))?;
+        if !path_str.is_empty() && path_str.chars().find(|c| *c == '/' || *c == '.').is_none() {
+            which::which(path)
+                .with_context(|| format!("Failed to find path in $PATH for: {:?}", path))
+        } else {
+            // if we don't have a tilde-prefix that we support, just return the unmodified path
+            Ok(PathBuf::from(path))
         }
     }
-
-    // if we don't have a tilde-prefix that we support, just return the unmodified path
-    std::path::PathBuf::from(path)
 }
 
 /// Copy the contents of the `src` directory to a new directory named `dst`. Permissions will be
@@ -268,37 +277,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_tilde_expansion() {
+    fn test_resolve_exec_path() {
+        fn resolve_exec(path: &str) -> anyhow::Result<std::path::PathBuf> {
+            resolve_path(Path::new(path))
+        }
         if let Ok(ref home) = std::env::var("HOME") {
+            assert_eq!(resolve_exec("bash").unwrap(), which::which("bash").unwrap());
+
             assert_eq!(
-                tilde_expansion("~/test"),
+                resolve_exec("~/test").unwrap(),
                 [home, "test"].iter().collect::<std::path::PathBuf>()
             );
 
             assert_eq!(
-                tilde_expansion("~"),
+                resolve_exec("~").unwrap(),
                 [home].iter().collect::<std::path::PathBuf>()
             );
 
             assert_eq!(
-                tilde_expansion("~/"),
+                resolve_exec("~/").unwrap(),
                 [home].iter().collect::<std::path::PathBuf>()
             );
 
             assert_eq!(
-                tilde_expansion("~someuser/test"),
-                ["/home", "someuser", "test"]
-                    .iter()
-                    .collect::<std::path::PathBuf>()
-            );
-
-            assert_eq!(
-                tilde_expansion("/~/test"),
+                resolve_exec("/~/test").unwrap(),
                 ["/", "~", "test"].iter().collect::<std::path::PathBuf>()
             );
 
             assert_eq!(
-                tilde_expansion(""),
+                resolve_exec("").unwrap(),
                 [""].iter().collect::<std::path::PathBuf>()
             );
         }
