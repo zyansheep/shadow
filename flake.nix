@@ -12,15 +12,13 @@
 				pkgs = import nixpkgs {
 					inherit system overlays;
 				};
-				rust = pkgs.rust-bin.stable.latest.default.override { extensions = [ "rust-src" ]; };
 			in
 			with pkgs;
 			{
 				devShells.default = mkShell {
 					buildInputs = [
-						rust
 						glib
-						python
+						python3
 						cmake
 						ninja
 						pkg-config
@@ -28,11 +26,12 @@
 						cpufrequtils
 						cargo
 						rustc
-						pcre
+						pcre2
 						bash
 						clang
 						libclang
 						tor
+						(rust-bin.fromRustupToolchainFile ./rust-toolchain.toml)
 					];
 					LD_LIBRARY_PATH = lib.makeLibraryPath [ libclang ];
 				};
